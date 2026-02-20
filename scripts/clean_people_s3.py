@@ -341,6 +341,7 @@ def main() -> None:
             with ctx:
                 image_features = model.encode_image(images)
             image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+            image_features = image_features.to(class_text.dtype)
             logits = 100.0 * image_features @ class_text.T
             probs = logits.softmax(dim=-1)[:, 0].detach().cpu()
 
