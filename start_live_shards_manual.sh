@@ -46,13 +46,19 @@ set -euo pipefail
 cd "$WORKDIR"
 source .env
 git fetch origin --prune
-git checkout "$GIT_BRANCH"
+if git show-ref --verify --quiet "refs/heads/$GIT_BRANCH"; then
+  git checkout "$GIT_BRANCH"
+else
+  git checkout -b "$GIT_BRANCH"
+fi
 git reset --hard "origin/$GIT_BRANCH"
 
 bash bootstrap_cleaner.sh
 
-pkill -af \"clean_people_s3.py\" || true
-pkill -af \"monitor_server.py\" || true
+pkill -f \"clean_people_s3.py\" || true
+pkill -f \"monitor_server.py\" || true
+
+mkdir -p /tmp/people_clean_monitor
 
 export SHARD_INDEX=\"$shard_index\"
 export SHARD_COUNT=\"${SHARD_COUNT}\"
