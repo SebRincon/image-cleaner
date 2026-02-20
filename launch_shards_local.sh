@@ -1,15 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${AWS_ACCESS_KEY_ID:?Set AWS_ACCESS_KEY_ID}"
-: "${AWS_SECRET_ACCESS_KEY:?Set AWS_SECRET_ACCESS_KEY}"
+S3_AWS_ACCESS_KEY_ID="${S3_AWS_ACCESS_KEY_ID:?Set S3_AWS_ACCESS_KEY_ID}"
+S3_AWS_SECRET_ACCESS_KEY="${S3_AWS_SECRET_ACCESS_KEY:?Set S3_AWS_SECRET_ACCESS_KEY}"
+S3_AWS_SESSION_TOKEN="${S3_AWS_SESSION_TOKEN:-}"
+
+AWS_ACCESS_KEY_ID="$S3_AWS_ACCESS_KEY_ID"
+AWS_SECRET_ACCESS_KEY="$S3_AWS_SECRET_ACCESS_KEY"
+if [[ -n "${S3_AWS_SESSION_TOKEN:-}" ]]; then
+  AWS_SESSION_TOKEN="$S3_AWS_SESSION_TOKEN"
+fi
 
 RUN_ID="${RUN_ID:-2026-02-20_peopleclean_v1}"
 SHARD_COUNT="${SHARD_COUNT:-4}"
 REGION="${REGION:-us-east-1}"
 CODE_DIR="${CODE_DIR:-/workspace/image-cleaner}"
 GIT_REPO_URL="${GIT_REPO_URL:-}"
-GIT_BRANCH="${GIT_BRANCH:-main}"
+GIT_BRANCH="${GIT_BRANCH:-master}"
+
+if [[ -z "${GIT_REPO_URL}" ]] && command -v git >/dev/null 2>&1; then
+  GIT_REPO_URL="$(git -C "$CODE_DIR" remote get-url origin 2>/dev/null || true)"
+fi
 IMAGE_NAME="${RUNPOD_IMAGE_NAME:-runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04}"
 GPU_TYPE="${RUNPOD_GPU_TYPE:-NVIDIA GeForce RTX 5090}"
 CONTAINER_DISK_SIZE="${CONTAINER_DISK_SIZE:-50}"
@@ -67,6 +78,8 @@ create_with_template() {
     --name "$pod_name" \
     --env "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID" \
     --env "AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY" \
+    --env "S3_AWS_ACCESS_KEY_ID=$S3_AWS_ACCESS_KEY_ID" \
+    --env "S3_AWS_SECRET_ACCESS_KEY=$S3_AWS_SECRET_ACCESS_KEY" \
     --env "AWS_DEFAULT_REGION=$REGION" \
     --env "MONITOR_PORT=$MONITOR_PORT" \
     --env "ENABLE_POD_MONITOR=$ENABLE_POD_MONITOR" \
@@ -82,12 +95,12 @@ create_with_template() {
     --env "DRY_RUN=${DRY_RUN:-0}" \
     --env "EMIT_PRESIGNED_URLS=${EMIT_PRESIGNED_URLS:-0}" \
     --env "PRESIGN_SECONDS=${PRESIGN_SECONDS:-604800}" \
-    "${SESSION_TOKEN_ARGS[@]}" \
-    "${SSH_FLAGS[@]}" \
-    "${PORT_FLAGS[@]}" \
+    ${SESSION_TOKEN_ARGS[@]+"${SESSION_TOKEN_ARGS[@]}"} \
+    ${SSH_FLAGS[@]+"${SSH_FLAGS[@]}"} \
+    ${PORT_FLAGS[@]+"${PORT_FLAGS[@]}"} \
     --env "GIT_REPO_URL=$GIT_REPO_URL" \
     --env "GIT_BRANCH=$GIT_BRANCH" \
-    --args "bash -lc \"$STARTUP_CMD\""
+    --args "bash -lc $STARTUP_CMD"
 }
 
 create_with_explicit() {
@@ -100,6 +113,8 @@ create_with_explicit() {
     --name "$pod_name" \
     --env "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID" \
     --env "AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY" \
+    --env "S3_AWS_ACCESS_KEY_ID=$S3_AWS_ACCESS_KEY_ID" \
+    --env "S3_AWS_SECRET_ACCESS_KEY=$S3_AWS_SECRET_ACCESS_KEY" \
     --env "AWS_DEFAULT_REGION=$REGION" \
     --env "MONITOR_PORT=$MONITOR_PORT" \
     --env "ENABLE_POD_MONITOR=$ENABLE_POD_MONITOR" \
@@ -115,26 +130,26 @@ create_with_explicit() {
     --env "DRY_RUN=${DRY_RUN:-0}" \
     --env "EMIT_PRESIGNED_URLS=${EMIT_PRESIGNED_URLS:-0}" \
     --env "PRESIGN_SECONDS=${PRESIGN_SECONDS:-604800}" \
-    "${SESSION_TOKEN_ARGS[@]}" \
-    "${SSH_FLAGS[@]}" \
-    "${PORT_FLAGS[@]}" \
+    ${SESSION_TOKEN_ARGS[@]+"${SESSION_TOKEN_ARGS[@]}"} \
+    ${SSH_FLAGS[@]+"${SSH_FLAGS[@]}"} \
+    ${PORT_FLAGS[@]+"${PORT_FLAGS[@]}"} \
     --env "GIT_REPO_URL=$GIT_REPO_URL" \
     --env "GIT_BRANCH=$GIT_BRANCH" \
-    --args "bash -lc \"$STARTUP_CMD\""
+    --args "bash -lc $STARTUP_CMD"
 }
 
 for ((i=0; i<SHARD_COUNT; i++)); do
   POD_NAME="people-clean-${RUN_ID}-shard-${i}"
   echo "Launching ${POD_NAME}"
 
-  STARTUP_CMD="if [[ ! -f \"$CODE_DIR/bootstrap_cleaner.sh\" || ! -f \"$CODE_DIR/run_cleaner_shard.sh\" ]]; then "
-  STARTUP_CMD+="if [[ -z \"$GIT_REPO_URL\" ]]; then "
-  STARTUP_CMD+="echo \"Code not found at $CODE_DIR and GIT_REPO_URL not set\" >&2; exit 1; "
+  STARTUP_CMD='if [[ ! -f $CODE_DIR/bootstrap_cleaner.sh || ! -f $CODE_DIR/run_cleaner_shard.sh ]]; then '
+  STARTUP_CMD+="if [[ -z $GIT_REPO_URL ]]; then "
+  STARTUP_CMD+="echo Code not found at $CODE_DIR and GIT_REPO_URL not set >&2; exit 1; "
   STARTUP_CMD+="fi; "
-  STARTUP_CMD+="mkdir -p \"$(dirname "$CODE_DIR")\" \"$CODE_DIR\"; "
-  STARTUP_CMD+="git clone --depth 1 --branch \"$GIT_BRANCH\" \"$GIT_REPO_URL\" \"$CODE_DIR\"; "
+  STARTUP_CMD+="mkdir -p $(dirname $CODE_DIR) $CODE_DIR; "
+  STARTUP_CMD+="git clone --depth 1 --branch $GIT_BRANCH $GIT_REPO_URL $CODE_DIR; "
   STARTUP_CMD+="fi; "
-  STARTUP_CMD+="cd \"$CODE_DIR\" && bash bootstrap_cleaner.sh && bash run_cleaner_shard.sh"
+  STARTUP_CMD+="cd $CODE_DIR && bash bootstrap_cleaner.sh && bash run_cleaner_shard.sh"
 
   if [[ "$FORCE_EXPLICIT_LAUNCH" == "1" ]]; then
     echo "FORCE_EXPLICIT_LAUNCH=1, using image/gpu launch path"

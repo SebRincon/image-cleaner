@@ -20,12 +20,12 @@ You need a RunPod pod with Python and enough GPU/CPU for CLIP inference.
 
 ## 2) Configure AWS credentials
 
-Export credentials in your RunPod pod environment (or use RunPod Secrets):
+Export credentials in your RunPod pod environment (or use RunPod Secrets). Use only:
 
 ```bash
-export AWS_ACCESS_KEY_ID=...
-export AWS_SECRET_ACCESS_KEY=...
-export AWS_SESSION_TOKEN=...   # optional
+export S3_AWS_ACCESS_KEY_ID=...
+export S3_AWS_SECRET_ACCESS_KEY=...
+export S3_AWS_SESSION_TOKEN=...   # optional
 export AWS_DEFAULT_REGION=us-east-1
 ```
 
