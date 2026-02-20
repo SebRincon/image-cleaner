@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${RUN_ID:?Set RUN_ID in .env or environment}"
-: "${SHARD_COUNT:?Set SHARD_COUNT in .env or environment}"
-
 WORKDIR="${WORKDIR:-/workspace/image-cleaner}"
 KEY_PATH="${RUNPOD_KEY_PATH:-$HOME/.ssh/runpod_image_cleaner}"
 GIT_BRANCH="${GIT_BRANCH:-master}"
@@ -20,6 +17,9 @@ if [[ ! -f .env ]]; then
 fi
 
 source .env
+
+: "${RUN_ID:?Set RUN_ID in .env or environment}"
+: "${SHARD_COUNT:?Set SHARD_COUNT in .env or environment}"
 
 if [[ -z "${S3_AWS_ACCESS_KEY_ID:-}" || -z "${S3_AWS_SECRET_ACCESS_KEY:-}" ]]; then
   echo "S3_AWS_ACCESS_KEY_ID and S3_AWS_SECRET_ACCESS_KEY must be set in .env" >&2
