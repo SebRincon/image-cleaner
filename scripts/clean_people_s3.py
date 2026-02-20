@@ -279,7 +279,13 @@ def main() -> None:
     model, _, preprocess = open_clip.create_model_and_transforms(
         args.model, pretrained=args.pretrained
     )
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    has_cuda = bool(torch.cuda.is_available())
+    if not has_cuda:
+        raise RuntimeError(
+            "CUDA is not available in this runtime. This cleaner requires a GPU."
+        )
+    device = torch.device("cuda")
+    device_name = torch.cuda.get_device_name(0)
     model = model.to(device).eval()
 
     positive_prompts = [
@@ -324,6 +330,8 @@ def main() -> None:
             "threshold": args.threshold,
             "batch_size": args.batch_size,
             "max_images": args.max_images,
+            "device": device.type,
+            "device_name": device_name,
         },
     )
 
